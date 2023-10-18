@@ -25,9 +25,9 @@ parameters = {
 cold_model = vertexai.VertexAI(**cold_parameters)
 model = vertexai.VertexAI(**parameters)
 
-N = 2
+N = 1
 tp_set = mutation_prompts[:N]
-mutator_set= thinking_styles[:N]
+mutator_set= thinking_styles[:2]
 problem_description="Solve the math word problem, giving your answer as an arabic numeral."
 
 

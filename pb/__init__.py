@@ -1,58 +1,21 @@
-import os
 import warnings
 import random
-import json
 import re
 from typing import List
-
-import pydantic
 
 from langchain.llms.base import BaseLLM
 from langchain.prompts import PromptTemplate
 from langchain.schema.output_parser import StrOutputParser
 
-from . import gsm
+from pb.mutation_operators import mutate
+from pb import gsm
+from pb.types import EvolutionUnit, Population
 
 # setup 
 # ignore the langchain warning
 warnings.filterwarnings("ignore", message="Importing llm_cache from langchain root ")
 
 gsm8k_examples = gsm.read_jsonl('pb/data/gsm.jsonl')
- 
-class EvolutionUnit(pydantic.BaseModel):
-    """ A individual unit of the overall population.
-
-    Attributes:
-        'T': the thinking_style.
-
-        'M': the mutation_prompt.
-
-        'P': the task_prompt.
-        
-        'fitness': the estimated performance of the unit.
-        
-        'history': historical prompts for analysis. 
-    """
-    T: str
-    M: str
-    P: str
-    fitness: float
-    history: List[str]
-
-class Population(pydantic.BaseModel):
-    """ Population model that holds the age of the population, its size, and a list of individuals.
-    
-    Attributes:
-        'size' (int): the size of the population.
-
-        'age' (int): the age of the population.
-        
-        'units' (List[EvolutionUnit]): the individuals of a population.
-    """
-    size: int
-    age: int
-    problem_description: str
-    units: List[EvolutionUnit]
 
 def create_population(tp_set: List, mutator_set: List, problem_description: str) -> Population:
     """samples the mutation_prompts and thinking_styles and returns a 'Population' object.
@@ -65,6 +28,7 @@ def create_population(tp_set: List, mutator_set: List, problem_description: str)
         'size': len(tp_set)*len(mutator_set),
         'age': 0,
         'problem_description' : problem_description,
+        'elites' : [],
         'units': [EvolutionUnit(**{
             'T' : t, 
             'M' : m,
@@ -99,16 +63,18 @@ def init_run(population: Population, model: BaseLLM):
     assert len(response) == population.size, "size of google response to population is mismatched"
     for i, item in enumerate(response):
         population.units[i].P = item
+    
+    _evaluate_fitness(population, model)
+    return population
 
 def run_for_n(n: int, population: Population, model: BaseLLM):
     """ Runs the genetic algorithm for n generations.
-    """
-    for i in range(n):
-        print("Population {i}")
-        p = _evaluate_fitness(population, model)
-        # in here is when I pick 1 of the 9 potential mutation operators.
-        for i, x in enumerate(population.units):
-            population.units[i] = random_mutator(x)
+    """     
+    p = population
+    for i in range(n):  
+        print(f"================== Population {i} ================== ")
+        mutate(p, model)
+        _evaluate_fitness(p, model)
 
     return p
 
@@ -118,6 +84,7 @@ def _evaluate_fitness(population: Population, model: BaseLLM, batch_size=4) -> P
     # need to query each prompt, and extract the answer. hardcoded 4 examples for now.
     batch = random.sample(gsm8k_examples, batch_size)
     
+    elite_fitness = -1
     for unit in population.units:
         # set the fitness to zero from past run.
         unit.fitness = 0
@@ -130,4 +97,12 @@ def _evaluate_fitness(population: Population, model: BaseLLM, batch_size=4) -> P
             if valid:
                 # 0.25 = 1 / 4 examples
                 unit.fitness += (1 / batch_size)
+
+            if unit.fitness > elite_fitness:
+                # I am copying this bc I don't know how it might get manipulated by future mutations.
+                current_elite = unit.model_copy()
+                elite_fitness = unit.fitness
+    
+    # append best unit of generation to the elites list.
+    population.elites.append(current_elite)
     return population

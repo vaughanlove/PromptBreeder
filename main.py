@@ -1,11 +1,36 @@
-from pb import create_population, init_run, _evaluate_fitness
+from pb import create_population, init_run, run_for_n
+from pb.mutation_prompts import mutation_prompts
+from pb.thinking_styles import thinking_styles
+import os
+from dotenv import load_dotenv
+from google.cloud import aiplatform
+from langchain.llms import vertexai
 
-p = create_population(size=2, problem_description= "Solve the math word problem, giving your answer as an arabic numeral.")
+load_dotenv() # load environment variables
+aiplatform.init(project=os.getenv("PROJECT_ID")) # auth the google project
 
-p = init_run(p)
+# parameters for our VertexAI model when evaluating questions.
+cold_parameters = {
+    "temperature": 0,  
+    "max_output_tokens": 256,  
+}
 
-for x in p.units:
-    print("\n\n\n" + "#"*60)
-    print(x.P)
+# parameters for our VertexAI model when mutating. temp=1 for randomness,
+#  allowing us to search more of the prompt space.
+parameters = {
+    "temperature": 1,  
+    "max_output_tokens": 256, 
+}
 
-_evaluate_fitness(p)
+cold_model = vertexai.VertexAI(**cold_parameters)
+model = vertexai.VertexAI(**parameters)
+
+N = 2
+tp_set = mutation_prompts[:N]
+mutator_set= thinking_styles[:N]
+problem_description="Solve the math word problem, giving your answer as an arabic numeral."
+
+
+p = create_population(tp_set=tp_set, mutator_set=mutator_set, problem_description=problem_description)
+init_run(p, model)
+run_for_n(n=1, population=p, model=cold_model)

@@ -5,36 +5,20 @@ import json
 import re
 from typing import List
 
-from dotenv import load_dotenv
 import pydantic
-from google.cloud import aiplatform
-from langchain.llms import vertexai
+
+from langchain.llms.base import BaseLLM
 from langchain.prompts import PromptTemplate
 from langchain.schema.output_parser import StrOutputParser
 
-from . import mutation_prompts
-from . import thinking_styles
 from . import gsm
 
 # setup 
 # ignore the langchain warning
 warnings.filterwarnings("ignore", message="Importing llm_cache from langchain root ")
-load_dotenv() # load environment variables
-aiplatform.init(project=os.getenv("PROJECT_ID")) # auth the google project
-
-# parameters for our VertexAI model.
-parameters = {
-    "temperature": 0,  # Temperature controls the degree of randomness in token selection.
-    "max_output_tokens": 256,  # Token limit determines the maximum amount of text output.
-    "top_p": 0.8,  # Tokens are selected from most probable to least until the sum of their probabilities equals the top_p value.
-    "top_k": 40,  # A top_k of 1 means the selected token is the most probable among all tokens.
-}
 
 gsm8k_examples = gsm.read_jsonl('pb/data/gsm.jsonl')
-
-model = vertexai.VertexAI(**parameters)
-
-
+ 
 class EvolutionUnit(pydantic.BaseModel):
     """ A individual unit of the overall population.
 
@@ -70,8 +54,7 @@ class Population(pydantic.BaseModel):
     problem_description: str
     units: List[EvolutionUnit]
 
-
-def create_population(size: int, problem_description: str) -> Population:
+def create_population(tp_set: List, mutator_set: List, problem_description: str) -> Population:
     """samples the mutation_prompts and thinking_styles and returns a 'Population' object.
 
     Args:
@@ -79,30 +62,27 @@ def create_population(size: int, problem_description: str) -> Population:
         'problem_description (D)' (str): the problem description we are optimizing for.
     """
     data = {
-        'size': size,
+        'size': len(tp_set)*len(mutator_set),
         'age': 0,
         'problem_description' : problem_description,
         'units': [EvolutionUnit(**{
-            'T' : random.choice(thinking_styles.thinking_styles), 
-            'M' : random.choice(mutation_prompts.mutation_prompts),
+            'T' : t, 
+            'M' : m,
             'P' : '',
             'fitness' : 0,
             'history' : []
-            }) for _ in range(size)]
+            }) for t in tp_set for m in mutator_set]
     }
 
     return Population(**data)
 
-def init_run(population: Population):
+def init_run(population: Population, model: BaseLLM):
     """ The first run of the population that consumes the prompt_description and 
     creates the first prompt_tasks.
     
     Args:
         population (Population): A population created by `create_population`.
     """
-
-    
-    
     batch = []
     for unit in population.units:
         batch.append({'T': unit.T, 'M' : unit.M, 'D' : population.problem_description})
@@ -120,26 +100,34 @@ def init_run(population: Population):
     for i, item in enumerate(response):
         population.units[i].P = item
 
-    return population
-
-def run_for_n(n: int):
+def run_for_n(n: int, population: Population, model: BaseLLM):
     """ Runs the genetic algorithm for n generations.
     """
-    pass
+    for i in range(n):
+        print("Population {i}")
+        p = _evaluate_fitness(population, model)
+        # in here is when I pick 1 of the 9 potential mutation operators.
+        for i, x in enumerate(population.units):
+            population.units[i] = random_mutator(x)
 
-def _evaluate_fitness(population: Population) -> Population:
+    return p
+
+def _evaluate_fitness(population: Population, model: BaseLLM, batch_size=4) -> Population:
     """ Evaluates each prompt P on a batch of Q&A samples, and populates the fitness values.
     """
-    # need to query each prompt, and extract the answer.
-    batch = random.sample(gsm8k_examples, 10)
+    # need to query each prompt, and extract the answer. hardcoded 4 examples for now.
+    batch = random.sample(gsm8k_examples, batch_size)
     
     for unit in population.units:
+        # set the fitness to zero from past run.
         unit.fitness = 0
-        # todo. batch this
+        # todo. model.batch this or multithread
         for example in batch:
-            result = model(example['question'] + ' ' + unit.P)
-            print(result)
+            # https://arxiv.org/pdf/2309.16797.pdf#page=5, P is a task-prompt to condition 
+            # the LLM before further input Q.
+            result = model(unit.P + ' ' + example['question'])
             valid = re.search(gsm.gsm_extract_answer(example['answer']), result)
             if valid:
-                print("correct answer.")
-                unit.fitness += 0.1
+                # 0.25 = 1 / 4 examples
+                unit.fitness += (1 / batch_size)
+    return population

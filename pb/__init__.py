@@ -6,6 +6,8 @@ from typing import List
 from langchain.llms.base import BaseLLM
 from langchain.prompts import PromptTemplate
 from langchain.schema.output_parser import StrOutputParser
+from rich import print
+
 
 from pb.mutation_operators import mutate
 from pb import gsm
@@ -74,7 +76,9 @@ def run_for_n(n: int, population: Population, model: BaseLLM):
     for i in range(n):  
         print(f"================== Population {i} ================== ")
         mutate(p, model)
+        print("done mutation")
         _evaluate_fitness(p, model)
+        print("done evaluation")
 
     return p
 
@@ -89,11 +93,12 @@ def _evaluate_fitness(population: Population, model: BaseLLM, batch_size=4) -> P
         # set the fitness to zero from past run.
         unit.fitness = 0
         # todo. model.batch this or multithread
-        for example in batch:
-            # https://arxiv.org/pdf/2309.16797.pdf#page=5, P is a task-prompt to condition 
-            # the LLM before further input Q.
-            result = model(unit.P + ' ' + example['question'])
-            valid = re.search(gsm.gsm_extract_answer(example['answer']), result)
+        examples = [unit.P + ' ' + example['question'] for example in batch]
+        # https://arxiv.org/pdf/2309.16797.pdf#page=5, P is a task-prompt to condition 
+        # the LLM before further input Q.            
+        results = model.batch(examples)
+        for i, x in enumerate(results):
+            valid = re.search(gsm.gsm_extract_answer(batch[i]['answer']), x)
             if valid:
                 # 0.25 = 1 / 4 examples
                 unit.fitness += (1 / batch_size)

@@ -34,7 +34,6 @@ def zero_order_prompt_gen(unit: EvolutionUnit, problem_description: str, model: 
     Returns: 
         EvolutionUnit: the evolution unit to replace the loser unit.
     """
-    print("zero_order_prompt_gen!")
     result = test_model(problem_description + " A list of 100 hints: ")
     # search for the pattern "anything after 1. and before 2."
     pattern = r"1\.(.*?)2\."
@@ -53,7 +52,6 @@ def first_order_prompt_gen(unit: EvolutionUnit, model: BaseLLM, **kwargs) -> Evo
     Returns: 
         EvolutionUnit: the evolution unit to replace the loser unit.
     """
-    print("first_order_prompt_gen!")
     unit.P = test_model(unit.M + " " + unit.P) 
     return unit
     
@@ -77,10 +75,9 @@ def lineage_based_mutation(unit: EvolutionUnit, elites: List[EvolutionUnit], mod
     Returns: 
         EvolutionUnit: the evolution unit to replace the loser unit.
     """
-    print("lineage_based_mutation")
     HEADING = "GENOTYPES FOUND IN ASCENDING ORDER OF QUALITY \n "
     # made a choice not to format it with newlines, could change later.
-    ITEMS = ["{}. {}".format(i+1, x.P) for i, x in enumerate(elites)]
+    ITEMS = "\n".join(["{}. {}".format(i+1, x.P) for i, x in enumerate(elites)])
     unit.P = test_model(HEADING + ITEMS)
     
     return unit
@@ -92,7 +89,6 @@ def zero_order_hypermutation(unit: EvolutionUnit, problem_description: str, mode
     Returns: 
         EvolutionUnit: the evolution unit to replace the loser unit.
     """
-    print("zero_order_hypermutation!")
     RANDOM_THINKING_STYLE = random.sample(thinking_styles, 1)[0]
     unit.M = test_model(problem_description + RANDOM_THINKING_STYLE)
     return unit
@@ -105,8 +101,6 @@ def first_order_hypermutation(unit: EvolutionUnit, model: BaseLLM, **kwargs) -> 
     Returns: 
         EvolutionUnit: the evolution unit to replace the loser unit.
     """
-    print("first_order_hypermutation!")
-
     HYPER_MUTATION_PROMPT="Please summarize and improve the following instruction: "
     unit.M = test_model(HYPER_MUTATION_PROMPT + unit.M)
     unit.P = test_model(unit.M + " " + unit.P)
@@ -125,8 +119,6 @@ def working_out_task_prompt(unit: EvolutionUnit, model: BaseLLM, **kwargs) -> Ev
     Returns: 
         EvolutionUnit: the evolution unit to replace the loser unit.
     """
-    print("working_out_task_prompt!")
-
     RANDOM_WORKING_OUT = random.sample(gsm8k_examples, 1)[0]
   
     unit.P = test_model("I gave a friend an instruction and some advice. Here are the correct examples of his workings out " + RANDOM_WORKING_OUT['question'] +  RANDOM_WORKING_OUT['answer'] + " The instruction was: ")
@@ -163,55 +155,55 @@ POST_MUTATORS = [
     context_shuffling
 ]
 
-def mutate(population: Population, model: BaseLLM):
+def mutate(population: Population, model: BaseLLM) -> Population:
     """Select and apply a random mutator"""
     # steps
     # 1. parse through the population, grouping each evo unit by 2
     # 2. for each pair of evo units, using a uniform distribution, select a random mutator (of the 9)
     # 3. mutate and populate population.units
 
-    # make a copy of population
-    temporary_units = population.units.copy()
+    # make index pairs
+    indices = [i for i in range(len(population.units))]
+    random.shuffle(indices)
+    pairs = [indices[2*x:2*x+2] for x in range(len(indices) // 2)]
 
-    for i in range(len(population.units) // 2):
-        first_random_index = random.randrange(len(temporary_units))
-        first_unit = population.units[first_random_index]
-        temporary_units.pop(first_random_index)
-    
-        second_random_index = random.randrange(len(temporary_units))
-        second_unit = population.units[second_random_index]
-        temporary_units.pop(second_random_index)
-        
+    # binary tourmanent genetic algorithm
+    for i in range(len(pairs)):
+
+        first_unit = population.units[pairs[i][0]]
+        second_unit = population.units[pairs[i][1]]
+
         print("%"*50)
         print("First unit: \n")
         print(first_unit)
         print("%"*50)
         print("Second unit: \n")
         print(second_unit)
+
         # determine which unit has the higher fitness. Since I am currently testing and want to preserve the # of calls I am making to the LLM, there 
         # is a decent chance that I will hit equal fitness levels. in that case, first unit wins and second unit loses.
         
-        # this is not great code
+        # TODO: clean this up
         FIRST_WON = False
-        if population.units[first_random_index].fitness >=  population.units[second_random_index].fitness:
+        if first_unit.fitness >=  second_unit.fitness:
             # loser gets mutated.
             FIRST_WON = True
-            input_unit = population.units[second_random_index].model_copy()
+            mutation_input = second_unit
         else:
-            input_unit = population.units[first_random_index].model_copy()
+            mutation_input = first_unit
+        
+        print("%"*50)
+        print(f"MUTATING: {mutation_input}")
         
         data = {
-            'unit' : input_unit,
-            'model' : model,
+            'unit' : mutation_input,
+            'model' : test_model,
             'elites' : population.elites,
             'problem_description': population.problem_description,
         }
 
+        # uniformly pick and call a random mutation operator on the losing unit
         random_mutator = random.sample(MUTATORS, 1)[0]
+        random_mutator(**data)
 
-        new_unit = random_mutator(**data)
-        print("here")
-        if FIRST_WON: 
-            population.units[second_random_index] = new_unit
-        else:
-            population.units[first_random_index] = new_unit
+    return population

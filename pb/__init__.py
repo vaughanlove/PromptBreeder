@@ -1,13 +1,14 @@
 import warnings
 import random
 import re
+import logging
 from typing import List
 
 from langchain.llms.base import BaseLLM
 from langchain.prompts import PromptTemplate
 from langchain.schema.output_parser import StrOutputParser
 from rich import print
-
+import time
 
 from pb.mutation_operators import mutate
 from pb import gsm
@@ -16,6 +17,7 @@ from pb.types import EvolutionUnit, Population
 # setup 
 # ignore the langchain warning
 warnings.filterwarnings("ignore", message="Importing llm_cache from langchain root ")
+logger = logging.getLogger(__name__)
 
 gsm8k_examples = gsm.read_jsonl('pb/data/gsm.jsonl')
 
@@ -49,10 +51,12 @@ def init_run(population: Population, model: BaseLLM):
     Args:
         population (Population): A population created by `create_population`.
     """
+
+    start_time = time.time()
+
     batch = []
     for unit in population.units:
         batch.append({'T': unit.T, 'M' : unit.M, 'D' : population.problem_description})
-
     template= "{T} {M} INSTRUCTION: {D} INSTRUCTION MUTANT = "
     prompt=PromptTemplate(
         template=template,
@@ -62,11 +66,16 @@ def init_run(population: Population, model: BaseLLM):
     initialization_chain = prompt | model | StrOutputParser()
     response = initialization_chain.batch(batch)
 
+    end_time = time.time()
+
+    logger.info(f"Prompt initialization done. {end_time - start_time}s")
+
     assert len(response) == population.size, "size of google response to population is mismatched"
     for i, item in enumerate(response):
         population.units[i].P = item
-    
+
     _evaluate_fitness(population, model)
+    
     return population
 
 def run_for_n(n: int, population: Population, model: BaseLLM):
@@ -86,6 +95,10 @@ def _evaluate_fitness(population: Population, model: BaseLLM, batch_size=4) -> P
     """ Evaluates each prompt P on a batch of Q&A samples, and populates the fitness values.
     """
     # need to query each prompt, and extract the answer. hardcoded 4 examples for now.
+    
+    logger.info(f"Starting fitness evaluation...")
+    start_time = time.time()
+
     batch = random.sample(gsm8k_examples, batch_size)
     
     elite_fitness = -1
@@ -94,6 +107,7 @@ def _evaluate_fitness(population: Population, model: BaseLLM, batch_size=4) -> P
         unit.fitness = 0
         # todo. model.batch this or multithread
         examples = [unit.P + ' ' + example['question'] for example in batch]
+
         # https://arxiv.org/pdf/2309.16797.pdf#page=5, P is a task-prompt to condition 
         # the LLM before further input Q.            
         results = model.batch(examples)
@@ -110,4 +124,7 @@ def _evaluate_fitness(population: Population, model: BaseLLM, batch_size=4) -> P
     
     # append best unit of generation to the elites list.
     population.elites.append(current_elite)
+    end_time = time.time()
+    logger.info(f"Done fitness evaluation. {end_time - start_time}s")
+
     return population

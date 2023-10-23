@@ -2,6 +2,7 @@ import warnings
 import random
 import re
 import logging
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import List
 
 from langchain.llms.base import BaseLLM
@@ -91,34 +92,53 @@ def run_for_n(n: int, population: Population, model: BaseLLM):
 
     return p
 
-def _evaluate_fitness(population: Population, model: BaseLLM, batch_size=4) -> Population:
+def _evaluate_fitness(population: Population, model: BaseLLM, batch_size=10) -> Population:
     """ Evaluates each prompt P on a batch of Q&A samples, and populates the fitness values.
     """
     # need to query each prompt, and extract the answer. hardcoded 4 examples for now.
-    
     logger.info(f"Starting fitness evaluation...")
     start_time = time.time()
 
-    batch = random.sample(gsm8k_examples, batch_size)
-    
-    elite_fitness = -1
-    for unit in population.units:
-        # set the fitness to zero from past run.
-        unit.fitness = 0
-        # todo. model.batch this or multithread
-        examples = [unit.P + ' ' + example['question'] for example in batch]
+    # create the testing batches - batch_size per unit
+    # https://arxiv.org/pdf/2309.16797.pdf#page=5, P is a task-prompt to condition 
+    # the LLM before further input Q.    
+    answers = []
 
-        # https://arxiv.org/pdf/2309.16797.pdf#page=5, P is a task-prompt to condition 
-        # the LLM before further input Q.            
-        results = model.batch(examples)
-        for i, x in enumerate(results):
-            valid = re.search(gsm.gsm_extract_answer(batch[i]['answer']), x)
+    # for each unit, take batch_size examples and append that unit's prompt. save the answers for later.
+    logger.info(f"start threading")
+
+    threads = []
+    results = []
+    with ThreadPoolExecutor(max_workers=20) as executor:
+        for unit in population.units:
+            logger.info(f"opening thread for: {unit.P}")
+
+            batch = []
+            for example in random.sample(gsm8k_examples, batch_size):
+                batch.append(example['question'] + " " + unit.P)
+                answers.append(example['answer'])
+
+            threads.append(executor.submit(model.batch, batch))
+
+        for task in as_completed(threads):
+            results.extend(task.result())
+    
+    logger.info(f"done threading: length of results: {len(results)}")
+
+    # threading to heavily accelerate. hopefully this returns in the correct order.
+    
+    #results = model.batch(batches)     # feed it through the LLM
+    elite_fitness = -1
+    # for each unit, evaluate the results compared to the previously saved answers.
+    for i, unit in enumerate(population.units):
+        unit.fitness = 0
+        eval_batch = results[i*batch_size:i*batch_size + batch_size]
+        for j, x in enumerate(eval_batch):
+            valid = re.search(gsm.gsm_extract_answer(answers[i*batch_size + j]), x)
             if valid:
                 # 0.25 = 1 / 4 examples
                 unit.fitness += (1 / batch_size)
-
             if unit.fitness > elite_fitness:
-                # I am copying this bc I don't know how it might get manipulated by future mutations.
                 current_elite = unit.model_copy()
                 elite_fitness = unit.fitness
     

@@ -34,7 +34,7 @@ def zero_order_prompt_gen(unit: EvolutionUnit, problem_description: str, model: 
     Returns: 
         EvolutionUnit: the evolution unit to replace the loser unit.
     """
-    result = test_model(problem_description + " A list of 100 hints: ")
+    result = test_model(problem_description + " An ordered list of 100 hints: ")
     # search for the pattern "anything after 1. and before 2."
     pattern = r"1\.(.*?)2\."
     match = re.search(pattern, result, re.DOTALL)
@@ -90,7 +90,7 @@ def zero_order_hypermutation(unit: EvolutionUnit, problem_description: str, mode
         EvolutionUnit: the evolution unit to replace the loser unit.
     """
     RANDOM_THINKING_STYLE = random.sample(thinking_styles, 1)[0]
-    unit.M = test_model(problem_description + RANDOM_THINKING_STYLE)
+    unit.M = test_model(problem_description + " " + RANDOM_THINKING_STYLE)
     return unit
 
 def first_order_hypermutation(unit: EvolutionUnit, model: BaseLLM, **kwargs) -> EvolutionUnit:
@@ -121,7 +121,7 @@ def working_out_task_prompt(unit: EvolutionUnit, model: BaseLLM, **kwargs) -> Ev
     """
     RANDOM_WORKING_OUT = random.sample(gsm8k_examples, 1)[0]
   
-    unit.P = test_model("I gave a friend an instruction and some advice. Here are the correct examples of his workings out " + RANDOM_WORKING_OUT['question'] +  RANDOM_WORKING_OUT['answer'] + " The instruction was: ")
+    unit.P = test_model("I gave a friend an instruction and some advice. Here are the correct examples of his workings out " + RANDOM_WORKING_OUT['question'] +" " +  RANDOM_WORKING_OUT['answer'] + " The instruction was: ")
     return unit 
 
 # Prompt crossover and context shuffling. These happen AFTER mutation operators. 
@@ -173,10 +173,10 @@ def mutate(population: Population, model: BaseLLM) -> Population:
         first_unit = population.units[pairs[i][0]]
         second_unit = population.units[pairs[i][1]]
 
-        print("%"*50)
+        print("%"*77)
         print("First unit: \n")
         print(first_unit)
-        print("%"*50)
+        print("%"*77)
         print("Second unit: \n")
         print(second_unit)
 
@@ -191,10 +191,7 @@ def mutate(population: Population, model: BaseLLM) -> Population:
             mutation_input = second_unit
         else:
             mutation_input = first_unit
-        
-        print("%"*50)
-        print(f"MUTATING: {mutation_input}")
-        
+
         data = {
             'unit' : mutation_input,
             'model' : test_model,
@@ -204,6 +201,8 @@ def mutate(population: Population, model: BaseLLM) -> Population:
 
         # uniformly pick and call a random mutation operator on the losing unit
         random_mutator = random.sample(MUTATORS, 1)[0]
+        print(f"MUTATING: {mutation_input} with {random_mutator.__name__}")
+
         random_mutator(**data)
 
     return population

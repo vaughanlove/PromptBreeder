@@ -43,7 +43,7 @@ P1:
 
 P0:
 
-    Give me the correct examples of his workings out. \n\nAdvice: When multiplying a number by a decimal, you can move the decimal point in the multiplier to the right by the same number of places as there are decimal places in the multiplicand. For example, 5 x $1.50 can be rewritten as 5 x $1.50 = 5 x 150/100 = $7.50 \n\nWhen adding or subtracting decimals, you need to line up the decimal points. For example, $7.50 + $7.50 = $15.0
+     planted with corn and soybeans from the total number of acres to find the number of acres planted with wheat.** \n\n- 100acres - 40 acres - 30 acres = 30 acres of wheat\n\n**Final Answer:** The farmer plants 30 acres of wheat.
 
 The entire output can be found in [example_output](example_output.txt).
 

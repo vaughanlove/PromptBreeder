@@ -39,9 +39,11 @@ note: the number of units is determined by `# units` = `mp` * `ts`.
 Performance was evaluated over a population size of 20 units, and fitness evaluation size of 20. 
 
 Each generation for these specs would make 10 (20 / 2) calls for mutations and 400 (20 units*20 fitness evaluations) calls for evaluating the fitness of the population. A total of 410 calls per generation.
-A generation for these specs took ~701s and cost ~$0.95. Roughly 1.7s/call, and $0.00234/call. An average of ~810 output tokens/call and ~ 770 input tokens per call. Which lines up pretty much exactly with Cohere's pricing.
+A generation for these specs took ~480s and cost ~$0.95. Roughly 1.17s/call, and $0.00234/call. An average of ~810 output tokens/call and ~ 770 input tokens per call. Which lines up pretty much exactly with Cohere's pricing.
 
-To follow the PromptBreeder paper: "We used a population size of 50 units, evolved for typically 20-30 generations". If we assume they are evaluating over 20 fitness examples as we are (they are more likely to be evaluating for 100+), for 50 units that would be total time = 20 generations x (25 mutations + 20x50 fitness evals) calls x (1.7s/call) ~ 7.11hrs. Costing 25x1025x($0.00234) = $60.0.
+To follow the PromptBreeder paper: "We used a population size of 50 units, evolved for typically 20-30 generations". If we assume they are evaluating over 20 fitness examples as we are (they are more likely to be evaluating for 100+), for 50 units that would be total time = 20 generations x (25 mutations + 20x50 fitness evals) calls x (1.17s/call) ~ 6.7hrs. Costing 25x1025x($0.00234) = $60.0.
+
+The bottleneck now is sequentially doing mutations. The reason I do this is some mutations mutate the entire population, so I would need to put the population in a cache and share it among threads? Or just randomly draw what mutations are going to happen all at once, and perform those that affect the whole population after the others have been run in parallel. 
 
 ## Outputs
 

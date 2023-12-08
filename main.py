@@ -43,4 +43,4 @@ run_for_n(n=int(args['simulations']), population=p, model=co, num_evals=int(args
 
 print("%"*80)
 print("done processing! final gen:")
-print(p)
+print(p.units)

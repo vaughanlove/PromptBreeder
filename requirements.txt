@@ -1,4 +1,4 @@
 rich==13.6.0
-langchain==0.0.317
-google-cloud-aiplatform==1.35.0
-sentence-transformers==2.2.2
+python-dotenv==1.0.0
+cohere==4.37
+pydantic==2.5.2

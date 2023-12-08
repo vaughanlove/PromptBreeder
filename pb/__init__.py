@@ -2,28 +2,19 @@ import warnings
 import random
 import re
 import logging
+import os
 from typing import List
 
-from langchain.llms.base import BaseLLM
-from langchain.prompts import PromptTemplate
-from langchain.schema.output_parser import StrOutputParser
 from rich import print
 import time
-from langchain.llms import VertexAI
-
+from cohere import Client
 
 from pb.mutation_operators import mutate
 from pb import gsm
 from pb.types import EvolutionUnit, Population
 
-# cold model for evaluation
-cold_parameters = {
-    "temperature": 0.0,  
-}
-cold_model = VertexAI(**cold_parameters)
+COHERE_API_KEY = os.environ["COHERE_API_KEY"]
 
-# ignore the langchain warning
-warnings.filterwarnings("ignore", message="Importing llm_cache from langchain root ")
 logger = logging.getLogger(__name__)
 
 gsm8k_examples = gsm.read_jsonl('pb/data/gsm.jsonl')
@@ -51,7 +42,7 @@ def create_population(tp_set: List, mutator_set: List, problem_description: str)
 
     return Population(**data)
 
-def init_run(population: Population, model: BaseLLM, num_evals: int):
+def init_run(population: Population, model: Client, num_evals: int):
     """ The first run of the population that consumes the prompt_description and 
     creates the first prompt_tasks.
     
@@ -61,31 +52,28 @@ def init_run(population: Population, model: BaseLLM, num_evals: int):
 
     start_time = time.time()
 
-    batch = []
-    for unit in population.units:
-        batch.append({'T': unit.T, 'M' : unit.M, 'D' : population.problem_description})
-    template= "{T} {M} INSTRUCTION: {D} INSTRUCTION MUTANT = "
-    prompt=PromptTemplate(
-        template=template,
-        input_variables=["T", "M", "D"],
-    )
+    prompts = []
 
-    initialization_chain = prompt | model | StrOutputParser()
-    response = initialization_chain.batch(batch)
+    for unit in population.units:    
+        template= f"{unit.T} {unit.M} INSTRUCTION: {population.problem_description} INSTRUCTION MUTANT = "
+        prompts.append(template)
+    
+ 
+    results = model.batch_generate(prompts)
 
     end_time = time.time()
 
     logger.info(f"Prompt initialization done. {end_time - start_time}s")
 
-    assert len(response) == population.size, "size of google response to population is mismatched"
-    for i, item in enumerate(response):
-        population.units[i].P = item
+    assert len(results) == population.size, "size of google response to population is mismatched"
+    for i, item in enumerate(results):
+        population.units[i].P = item[0].text
 
-    _evaluate_fitness(population, num_evals)
+    _evaluate_fitness(population, model, num_evals)
     
     return population
 
-def run_for_n(n: int, population: Population, model: BaseLLM, num_evals: int):
+def run_for_n(n: int, population: Population, model: Client, num_evals: int):
     """ Runs the genetic algorithm for n generations.
     """     
     p = population
@@ -93,12 +81,12 @@ def run_for_n(n: int, population: Population, model: BaseLLM, num_evals: int):
         print(f"================== Population {i} ================== ")
         mutate(p, model)
         print("done mutation")
-        _evaluate_fitness(p, num_evals)
+        _evaluate_fitness(p, model, num_evals)
         print("done evaluation")
 
     return p
 
-def _evaluate_fitness(population: Population, num_evals: int) -> Population:
+def _evaluate_fitness(population: Population, model: Client, num_evals: int) -> Population:
     """ Evaluates each prompt P on a batch of Q&A samples, and populates the fitness values.
     """
     # need to query each prompt, and extract the answer. hardcoded 4 examples for now.
@@ -119,9 +107,9 @@ def _evaluate_fitness(population: Population, num_evals: int) -> Population:
 
         # https://arxiv.org/pdf/2309.16797.pdf#page=5, P is a task-prompt to condition 
         # the LLM before further input Q.            
-        results = cold_model.batch(examples)
+        results = model.batch_generate(examples, temperature=0)
         for i, x in enumerate(results):
-            valid = re.search(gsm.gsm_extract_answer(batch[i]['answer']), x)
+            valid = re.search(gsm.gsm_extract_answer(batch[i]['answer']), x[0].text)
             if valid:
                 # 0.25 = 1 / 4 examples
                 unit.fitness += (1 / num_evals)

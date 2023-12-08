@@ -1,7 +1,8 @@
 # PromptBreeder
-Google DeepMind's PromptBreeder (https://arxiv.org/pdf/2309.16797.pdf) for automated prompt engineering implemented using LangChain expression language(LCEL).
 
-**Currently only supports VertexAI.** It's built to accept any LangChain BaseLLM, so swapping is possible, just not supported currently. 
+Google DeepMind's PromptBreeder (https://arxiv.org/pdf/2309.16797.pdf) for automated prompt engineering.
+
+**Currently only supports Cohere.**
 
 ## Setup
 
@@ -17,21 +18,28 @@ Google DeepMind's PromptBreeder (https://arxiv.org/pdf/2309.16797.pdf) for autom
 
 `pip install -r requirements.txt`
 
-    Make sure you have installed gcloud cli (https://cloud.google.com/sdk/docs/install) and have authenticated with your Google Cloud Platform (GCP) project. Your GCP project needs to have vertex ai enabled. 
-
 ## Usage
 
-``` python .\main.py -mp 2 -ts 4 -e 10 -n 40 -problem "Solve the math word problem, giving your answer as an arabic numeral." ```
+``` python .\main.py -mp 2 -ts 4 -e 10 -n 40 -p "Solve the math word problem, giving your answer as an arabic numeral." ```
 
 Args:
 
-- `mp` - number of mutation prompts.
-- `ts` - number of thinking styles.
+- `mp` - number of mutation prompts to sample from mutation_prompts.py when initializing the population.
+- `ts` - number of thinking styles to sample from thinking_styles.py when initializing the population.
 - `e` - number of fitness examples to evaluate over.
 - `n` - number of generations to simulate.
-- `problem` - the problem_description.
+- `p` - the problem description.
 
 note: the number of units is determined by `# units` = `mp` * `ts`.
+
+## Performance
+
+Performance was evaluated over a population size of 20 units, and fitness evaluation size of 20. 
+
+Each generation for these specs would make 10 (20 / 2) calls for mutations and 400 (20 units*20 fitness evaluations) calls for evaluating the fitness of the population. A total of 410 calls per generation.
+A generation for these specs took ~701s and cost ~$0.95. Roughly 1.7s/call, and $0.00234/call. An average of ~810 output tokens/call and ~ 770 input tokens per call. Which lines up pretty much exactly with Cohere's pricing.
+
+To follow the PromptBreeder paper: "We used a population size of 50 units, evolved for typically 20-30 generations". If we assume they are evaluating over 20 fitness examples as we are (they are more likely to be evaluating for 100+), for 50 units that would be total time = 20 generations x (25 mutations + 20x50 fitness evals) calls x (1.7s/call) ~ 7.11hrs. Costing 25x1025x($0.00234) = $60.0.
 
 ## Outputs
 
@@ -50,22 +58,21 @@ The entire output can be found in [example_output](example_output.txt).
 ## In Progress
 
     [x] - switch to batched LLM calls - check out the mt branch.
+    [ ] - threadpool fitness scoring
     [ ] - Implement prompt_crossover
     [ ] - Implement context_shuffling
-    [ ] - Implement estimation_distribution_mutation
+    [ ] - Implement estimation_distribution_mutation  (use sentence-transformers==2.2.2)
 
 ## Complete
 
     [ ] - mutator operations
     [x] - GSM8K dataset implementation
-    [x] - LangChain BaseLLM for model (plug and play)
 
 ## Future
 
     [ ] - different datasets
     [x] - better logging
     [ ] - LLM as a fitness function
-    [ ] - improve fitness scoring
 
 ## Notes
 
@@ -81,8 +88,7 @@ Potentially useful for generating prompts that are more 'humanlike' - useful for
 
 ## Issues
 
- - Slow, tried to multithread but doesn't actually increase the speed of the program since Google rate limits to the speed of their batch() function to 60 inference calls/minute anyways.
-
- - Since it is slow, I only check fitness on batches of 4 by default. This can be scaled up, but will slow down the program significantly.
-
  - The way I assess if a question is "correct" is just parsing the LLM output for the presence of the answer. This could lead to False Positives.
+
+
+

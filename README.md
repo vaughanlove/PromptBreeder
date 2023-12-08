@@ -2,7 +2,9 @@
 
 Google DeepMind's PromptBreeder (https://arxiv.org/pdf/2309.16797.pdf) for automated prompt engineering.
 
-**Currently only supports Cohere.**
+**Currently only supports Cohere.** 
+
+Make a .env file similar to .env.sample and add your COHERE_API_KEY. Has to be a prod key, rate limits kill performance.  
 
 ## Setup
 
@@ -89,6 +91,3 @@ Potentially useful for generating prompts that are more 'humanlike' - useful for
 ## Issues
 
  - The way I assess if a question is "correct" is just parsing the LLM output for the presence of the answer. This could lead to False Positives.
-
-
-

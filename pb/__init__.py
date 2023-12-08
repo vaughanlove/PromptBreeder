@@ -3,6 +3,7 @@ import random
 import re
 import logging
 import os
+import concurrent.futures
 from typing import List
 
 from rich import print
@@ -99,20 +100,33 @@ def _evaluate_fitness(population: Population, model: Client, num_evals: int) -> 
     batch = gsm8k_examples[:num_evals]
 
     elite_fitness = -1
+    examples = []
     for unit in population.units:
         # set the fitness to zero from past run.
         unit.fitness = 0
         # todo. model.batch this or multithread
-        examples = [unit.P + ' ' + example['question'] for example in batch]
+        examples.append([unit.P + ' \n' + example['question'] for example in batch])
 
-        # https://arxiv.org/pdf/2309.16797.pdf#page=5, P is a task-prompt to condition 
-        # the LLM before further input Q.            
-        results = model.batch_generate(examples, temperature=0)
-        for i, x in enumerate(results):
+    results = []
+    with concurrent.futures.ThreadPoolExecutor(max_workers=len(examples)) as executor:
+        future_to_fit = {executor.submit(model.batch_generate, example_batch,  temperature=0): example_batch for example_batch in examples}
+        for future in concurrent.futures.as_completed(future_to_fit):
+            example_batch = future_to_fit[future]  # Get the prompt corresponding to this future
+            try:
+                data = future.result()
+                results.append(data)
+            except Exception as exc:
+                print(f"Exception: {exc}")
+
+
+    # https://arxiv.org/pdf/2309.16797.pdf#page=5, P is a task-prompt to condition 
+    # the LLM before further input Q.
+    for unit_index, fitness_results in enumerate(results):
+        for i, x in enumerate(fitness_results):
             valid = re.search(gsm.gsm_extract_answer(batch[i]['answer']), x[0].text)
             if valid:
                 # 0.25 = 1 / 4 examples
-                unit.fitness += (1 / num_evals)
+                population.units[unit_index].fitness += (1 / num_evals)
 
             if unit.fitness > elite_fitness:
                 # I am copying this bc I don't know how it might get manipulated by future mutations.

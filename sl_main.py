@@ -132,7 +132,7 @@ mp_selected_rows, ts_selected_rows  = dataframe_with_selections(mp_df, ts_df)
 st.session_state.size = len(mp_selected_rows) * len(ts_selected_rows)
 st.session_state.calls = (st.session_state.size*st.session_state.evals + st.session_state.size // 2)*st.session_state.generations
 
-second_button = st.button(f"run for {st.session_state.generations} generations")
+second_button = st.button(f"run for {st.session_state.generations} generations", disabled=(not (st.session_state.size > 0)))
 if second_button:
     st.session_state.population = create_population(tp_set=ts_selected_rows['0'].tolist(), mutator_set=mp_selected_rows['0'].tolist(), problem_description=problem_description)
     st.session_state.size = st.session_state.population.size

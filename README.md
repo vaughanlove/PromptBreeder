@@ -4,6 +4,8 @@ Google DeepMind's PromptBreeder (https://arxiv.org/pdf/2309.16797.pdf) for autom
 
 **Currently only supports Cohere.** 
 
+https://promptbreeder.streamlit.app/
+
 If using CLI: Make a .env file similar to .env.sample and add your COHERE_API_KEY. Has to be a prod key. 
 
 ## Setup

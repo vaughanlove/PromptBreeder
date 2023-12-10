@@ -14,8 +14,6 @@ from pb.mutation_operators import mutate
 from pb import gsm
 from pb.types import EvolutionUnit, Population
 
-COHERE_API_KEY = os.environ["COHERE_API_KEY"]
-
 logger = logging.getLogger(__name__)
 
 gsm8k_examples = gsm.read_jsonl('pb/data/gsm.jsonl')

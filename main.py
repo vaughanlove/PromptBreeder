@@ -13,8 +13,6 @@ import cohere
 
 load_dotenv() # load environment variables
 
-co = cohere.Client(os.environ['COHERE_API_KEY'])
-
 logging.basicConfig(format='%(asctime)s - %(levelname)s - %(message)s', level=logging.INFO)
 logger = logging.getLogger(__name__)
 
@@ -26,6 +24,11 @@ parser.add_argument('-n', '--simulations', default=10)
 parser.add_argument('-p', '--problem', default="Solve the math word problem, giving your answer as an arabic numeral.")       
 
 args = vars(parser.parse_args())
+
+total_evaluations = args['num_mutation_prompts']*args['num_thinking_styles']*args['num_evals']
+
+# set num_workers to total_evaluations so we always have a thread 
+co = cohere.Client(api_key=os.environ['COHERE_API_KEY'],  num_workers=total_evaluations, max_retries=5, timeout=30) #override the 2 min timeout with 30s. 
 
 tp_set = mutation_prompts[:int(args['num_mutation_prompts'])]
 mutator_set= thinking_styles[:int(args['num_thinking_styles'])]

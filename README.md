@@ -22,6 +22,14 @@ Make a .env file similar to .env.sample and add your COHERE_API_KEY. Has to be a
 
 ## Usage
 
+### streamlit
+
+[update with demo link]
+
+local UI: `streamlit run sl_main.py`
+
+### cli
+
 ``` python .\main.py -mp 2 -ts 4 -e 10 -n 40 -p "Solve the math word problem, giving your answer as an arabic numeral." ```
 
 Args:
@@ -47,22 +55,17 @@ The bottleneck now is sequentially doing mutations. The reason I do this is some
 
 ## Outputs
 
+![Alt text](pop10-hist.png)
+![Alt text](pop10-outputs.png)
+
 The two best prompts for the 40th gen:
 
-P1: 
-
-    Give me the correct examples of his workings out. \n\nAdvice: When multiplying a number by a decimal, you can move the decimal point in the multiplier to the right by the same number of places as there are decimal places in the multiplicand. For example, 5 x $1.50 can be rewritten as 5 x $1.50 = 5 x 150/100 = $7.50 \n\nWhen adding or subtracting decimals, you need to line up the decimal points. For example, $7.50 + $7.50 = $15.0
-
-P0:
-
-     planted with corn and soybeans from the total number of acres to find the number of acres planted with wheat.** \n\n- 100acres - 40 acres - 30 acres = 30 acres of wheat\n\n**Final Answer:** The farmer plants 30 acres of wheat.
-
-The entire output can be found in [example_output](example_output.txt).
+An entire population output can be found in [example_output](example_output.txt).
 
 ## In Progress
 
     [x] - switch to batched LLM calls - check out the mt branch.
-    [ ] - threadpool fitness scoring
+    [x] - threadpool fitness scoring
     [ ] - Implement prompt_crossover
     [ ] - Implement context_shuffling
     [ ] - Implement estimation_distribution_mutation  (use sentence-transformers==2.2.2)

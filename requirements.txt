@@ -2,3 +2,4 @@ rich==13.6.0
 python-dotenv==1.0.0
 cohere==4.37
 pydantic==2.5.2
+streamlit==1.29.0

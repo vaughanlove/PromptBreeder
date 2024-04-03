@@ -128,6 +128,9 @@ def _evaluate_fitness(population: Population, model: Client, num_evals: int) -> 
 
             if unit.fitness > elite_fitness:
                 # I am copying this bc I don't know how it might get manipulated by future mutations.
+
+                unit = population.units[unit_index]
+                
                 current_elite = unit.model_copy()
                 elite_fitness = unit.fitness
     
